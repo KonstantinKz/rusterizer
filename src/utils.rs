@@ -1,10 +1,61 @@
 pub mod geometry {
-    use glam::{Vec2, Vec3};
-    //#[derive(Debug, Copy, Clone)
+    use glam::{UVec3, Vec2, Vec3};
+
+    // required for the extend_from_slice in the add_section_from_vertices
+    #[derive(Clone)]
     pub struct Vertex {
         pub position: Vec3,
         pub color: Vec3,
         pub uv: Vec2,
+    }
+
+    pub struct Mesh {
+        pub triangles: Vec<UVec3>,
+        pub vertices: Vec<Vertex>,
+    }
+
+    impl Mesh {
+        pub fn create() -> Self {
+            Self {
+                triangles: Vec::new(),
+                vertices: Vec::new(),
+            }
+        }
+
+        pub fn get_triangles(&self) -> &Vec<UVec3> {
+            &self.triangles
+        }
+
+        pub fn _get_vertices(&self) -> &Vec<Vertex> {
+            &self.vertices
+        }
+
+        pub fn get_vertices_from_triangle(&self, triangle: UVec3) -> [&Vertex; 3] {
+            [
+                &self.vertices[triangle.x as usize],
+                &self.vertices[triangle.y as usize],
+                &self.vertices[triangle.z as usize],
+            ]
+        }
+
+        pub fn add_section_from_vertices(&mut self, triangles: &[UVec3], vertices: &[Vertex]) {
+            let offset = self.vertices.len() as u32;
+            let triangles: Vec<UVec3> = triangles.iter().map(|index| *index + offset).collect();
+            self.triangles.extend_from_slice(&triangles);
+            self.vertices.extend_from_slice(vertices);
+        }
+
+        pub fn from_vertices(triangles: &[UVec3], vertices: &[Vertex]) -> Self {
+            let mut mesh = Mesh::create();
+            mesh.add_section_from_vertices(triangles, vertices);
+            mesh
+        }
+    }
+
+    impl Default for Mesh {
+        fn default() -> Self {
+            Self::create()
+        }
     }
 }
 
@@ -25,8 +76,8 @@ pub mod utils {
     }
 
     // conversion from indives to coordinate system
-    pub fn from_index_coords(index: usize, width: usize) -> Vec2 {
-        Vec2::new((index % width) as f32, (index / width) as f32)
+    pub fn from_index_coords(index: usize, width: usize) -> (usize, usize) {
+        (index % width, index / width)
     }
 
     // conversion from a coordinate system to indices
@@ -48,5 +99,16 @@ pub mod utils {
 
         let res = 1.0 / area;
         Vec3::new(ef0 * res, ef1 * res, ef2 * res)
+    }
+
+    pub fn map_to_range<T>(v: T, a1: T, a2: T, b1: T, b2: T) -> T
+    where
+        T: std::ops::Sub<Output = T>
+            + std::ops::Div<Output = T>
+            + std::ops::Mul<Output = T>
+            + std::ops::Add<Output = T>
+            + Copy,
+    {
+        b1 + (v - a1) * (b2 - b1) / (a2 - a1)
     }
 }
