@@ -1,57 +1,154 @@
-pub mod structures {
-    use glam::{Vec2, Vec3};
-    //#[derive(Debug, Copy, Clone)]
-    pub struct Vertex2d {
-        pub position: Vec2,
-        pub color: Vec3,
-    }
+use crate::texture::Texture;
+use crate::utils::{geometry::*, utils::*};
+use glam::{Vec2, Vec3, Vec3Swizzles};
 
-    pub struct Vertex3d {
-        pub position: Vec3,
-        pub color: Vec3,
-        pub uv: Vec2,
-    }
+pub struct Screen {
+    pub width: usize,
+    pub height: usize,
+    pub data: Vec<u32>,
+    pub z_buffer: Vec<f32>,
 }
 
-pub mod utils {
-    use glam::{Vec2, Vec3};
-
-    pub fn from_u8_rgb(r: u8, g: u8, b: u8) -> u32 {
-        let (r, g, b) = (r as u32, g as u32, b as u32);
-        (r << 16) | (g << 8) | b
+impl Screen {
+    // creates necessary buffers
+    pub fn create(screen_width: usize, screen_height: usize) -> Self {
+        Self {
+            width: screen_width,
+            height: screen_height,
+            data: vec![0; screen_width * screen_height],
+            z_buffer: vec![f32::INFINITY; screen_width * screen_height],
+        }
     }
 
-    pub fn from_rgb_u32(color: Vec3) -> u32 {
-        from_u8_rgb(
-            (color.x * 255.0) as u8,
-            (color.y * 255.0) as u8,
-            (color.z * 255.0) as u8,
-        )
+    // clears the screen
+    pub fn clear(&mut self) {
+        self.data.fill(0);
     }
 
-    // conversion from indives to coordinate system
-    pub fn from_index_coords(index: usize, width: usize) -> Vec2 {
-        Vec2::new((index % width) as f32, (index / width) as f32)
+    // outputs indicies as a color
+    pub fn output_index(&mut self) {
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let index_as_color = i as f32 / (self.width * self.height) as f32;
+            let index_as_color = (index_as_color * 255.0) as u8;
+            *pixel = from_u8_rgb(index_as_color, index_as_color, index_as_color)
+        }
     }
 
-    // conversion from a coordinate system to indices
-    pub fn from_coords_index(pos: Vec2, width: usize) -> usize {
-        pos.x as usize + pos.y as usize * width
+    // outputs coords as a color
+    pub fn output_coords(&mut self) {
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            *pixel = from_u8_rgb(
+                (coords.x * 255.0 / self.width as f32) as u8,
+                (coords.y * 255.0 / self.height as f32) as u8,
+                0,
+            )
+        }
     }
 
-    pub fn edge_function(pos: Vec2, v0: Vec2, v1: Vec2) -> f32 {
-        let seg_a = v1 - v0;
-        let seg_b = pos - v0;
+    // tests edge function with green and red colors
+    pub fn output_edge_function(&mut self, v0: Vec2, v1: Vec2) {
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            let mut color: u32 = 0;
+            let edge_func = edge_function(coords, v0, v1);
 
-        seg_a.x * seg_b.y - seg_a.y * seg_b.x
+            if edge_func > 0.0 {
+                color = from_u8_rgb(255, 0, 0);
+            } else if edge_func < 0.0 {
+                color = from_u8_rgb(0, 255, 0);
+            }
+
+            *pixel = color;
+        }
     }
 
-    pub fn barycentric_cordinates(pos: Vec2, v0: Vec2, v1: Vec2, v2: Vec2, area: f32) -> Vec3 {
-        let ef0 = edge_function(pos, v0, v1);
-        let ef1 = edge_function(pos, v1, v2);
-        let ef2 = edge_function(pos, v2, v0);
+    // tests triangle with green and red colors
+    pub fn output_triangle1(&mut self, v0: Vec2, v1: Vec2, v2: Vec2) {
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            let ef0 = edge_function(coords, v1, v2);
+            let ef1 = edge_function(coords, v2, v0);
+            let ef2 = edge_function(coords, v0, v1);
 
-        let res = 1.0 / area;
-        Vec3::new(ef0 * res, ef1 * res, ef2 * res)
+            if ef0 > 0.0 && ef1 > 0.0 && ef2 > 0.0 || ef0 < 0.0 && ef1 < 0.0 && ef2 < 0.0 {
+                *pixel = from_u8_rgb(0, 255, 0);
+            } else {
+                *pixel = from_u8_rgb(255, 0, 0);
+            }
+        }
+    }
+
+    // tests triangle with edge function outputs
+    pub fn output_triangle2(&mut self, v0: Vec2, v1: Vec2, v2: Vec2) {
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            let ef0 = edge_function(coords, v0, v1);
+            let ef1 = edge_function(coords, v1, v2);
+            let ef2 = edge_function(coords, v2, v0);
+
+            *pixel = from_u8_rgb(
+                (ef0 * 255.0) as u8,
+                (ef1 * 255.0) as u8,
+                (ef2 * 255.0) as u8,
+            );
+        }
+    }
+
+    // outputs barycentric coordinates
+    pub fn output_barycentric(&mut self, v0: &Vertex, v1: &Vertex, v2: &Vertex) {
+        let triangle_area = edge_function(v0.position.xy(), v1.position.xy(), v2.position.xy());
+
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            let coords = glam::vec2(coords.x as f32, coords.y as f32) + 0.5;
+
+            let barycentric = barycentric_cordinates(
+                coords,
+                v0.position.xy(),
+                v1.position.xy(),
+                v2.position.xy(),
+                triangle_area,
+            );
+
+            let mut color: Vec3 = glam::vec3(0.0, 0.0, 0.0);
+            if barycentric.x > 0.0 && barycentric.y > 0.0 && barycentric.z > 0.0 {
+                color =
+                    barycentric.x * v0.color + barycentric.y * v1.color + barycentric.z * v2.color;
+            }
+            *pixel = from_rgb_u32(color);
+        }
+    }
+
+    // rasterize triangle
+    pub fn raster_triangle(&mut self, v0: &Vertex, v1: &Vertex, v2: &Vertex, texture: &Texture) {
+        let triangle_area = edge_function(v0.position.xy(), v1.position.xy(), v2.position.xy());
+
+        for (i, pixel) in self.data.iter_mut().enumerate() {
+            let coords = from_index_coords(i, self.width);
+            let coords = glam::vec2(coords.x as f32, coords.y as f32) + 0.5;
+
+            let barycentric = barycentric_cordinates(
+                coords,
+                v0.position.xy(),
+                v1.position.xy(),
+                v2.position.xy(),
+                triangle_area,
+            );
+
+            if barycentric.x > 0.0 && barycentric.y > 0.0 && barycentric.z > 0.0 {
+                let depth = barycentric.x * v0.position.z
+                    + barycentric.y * v1.position.z
+                    + barycentric.z * v2.position.z;
+                if depth < self.z_buffer[i] {
+                    self.z_buffer[i] = depth;
+
+                    let tex_coords =
+                        barycentric.x * v0.uv + barycentric.y * v1.uv + barycentric.z * v2.uv;
+                    let color = texture.sample_at_uv(tex_coords.x, tex_coords.y);
+                    *pixel = color;
+                }
+            }
+        }
     }
 }
