@@ -66,8 +66,10 @@ fn main() {
         //_test_triangle1(&mut screen);
         //_test_triangle2(&mut screen);
         //_test_barycentric(&mut screen);
+
         //_test_textured_triangle(&mut screen);
         //_test_textured_quad(&mut screen);
+
         //_test_camera(&mut screen, &mut rot);
         //_test_raster_mesh(&mut screen);
         //_test_textured_cube(&mut screen, &mut rot);

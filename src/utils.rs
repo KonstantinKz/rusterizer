@@ -1,12 +1,32 @@
 pub mod geometry {
-    use glam::{UVec3, Vec2, Vec3};
+    use glam::{Mat4, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
 
     // required for the extend_from_slice in the add_section_from_vertices
-    #[derive(Clone)]
+    #[derive(Debug, Copy, Clone)]
     pub struct Vertex {
-        pub position: Vec3,
+        pub position: Vec4,
         pub color: Vec3,
         pub uv: Vec2,
+    }
+
+    #[derive(Copy, Clone)]
+    pub struct Triangle {
+        pub v: [Vertex; 3],
+    }
+
+    impl Triangle {
+        pub fn transform(&self, matrix: &Mat4) -> Self {
+            let mut result = *self;
+            result.v[0].position = *matrix * self.v[0].position.xyz().extend(1.0);
+            result.v[1].position = *matrix * self.v[1].position.xyz().extend(1.0);
+            result.v[2].position = *matrix * self.v[2].position.xyz().extend(1.0);
+            result
+        }
+    }
+
+    pub enum ClipResult {
+        None,
+        One(Triangle),
     }
 
     pub struct Mesh {

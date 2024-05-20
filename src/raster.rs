@@ -1,8 +1,6 @@
-use crate::camera::*;
 use crate::texture::Texture;
-use crate::transform::Transform;
 use crate::utils::{geometry::*, utils::*};
-use glam::{Mat4, Vec2, Vec3, Vec3Swizzles, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4Swizzles};
 
 pub struct Screen {
     pub width: usize,
@@ -124,20 +122,20 @@ impl Screen {
     }
 
     // returns new vertex and reciprocal
-    pub fn process_vertex(mvp: Mat4, v: &Vertex, viewport: Vec2) -> (Vertex, f32) {
-        let clip = mvp * Vec4::from((v.position, 1.0));
-        let rec = 1.0 / clip.w;
+    pub fn process_vertex(v: &Vertex, viewport: Vec2) -> (Vertex, f32) {
+        let rec = 1.0 / v.position.w;
 
         let uv = v.uv * rec;
         let color = v.color * rec;
-        let ndc = clip * rec;
+        let ndc = v.position * rec;
 
         (
             Vertex {
-                position: glam::vec3(
+                position: glam::vec4(
                     map_to_range(ndc.x, -1.0, 1.0, 0.0, viewport.x),
                     map_to_range(-ndc.y, -1.0, 1.0, 0.0, viewport.y),
                     ndc.z,
+                    1.0,
                 ),
                 color: color,
                 uv: uv,
@@ -146,25 +144,12 @@ impl Screen {
         )
     }
 
-    pub fn get_screen_vertices(
-        &self,
-        cam: &Camera,
-        transform: &Mat4,
-        v0: &Vertex,
-        v1: &Vertex,
-        v2: &Vertex,
-    ) -> [(Vertex, f32); 3] {
-        let projection = cam.projection();
-        let view = cam.view();
-        let model = transform;
-
+    pub fn get_screen_vertices(&self, v0: &Vertex, v1: &Vertex, v2: &Vertex) -> [(Vertex, f32); 3] {
         let viewport_size = glam::vec2(self.width as f32, self.height as f32);
-        let mvp = projection * view * *model;
-
         [
-            Self::process_vertex(mvp, v0, viewport_size),
-            Self::process_vertex(mvp, v1, viewport_size),
-            Self::process_vertex(mvp, v2, viewport_size),
+            Self::process_vertex(v0, viewport_size),
+            Self::process_vertex(v1, viewport_size),
+            Self::process_vertex(v2, viewport_size),
         ]
     }
 
@@ -196,25 +181,59 @@ impl Screen {
         }
     }
 
+    pub fn view_frustum_culling(triangle: &Triangle) -> ClipResult {
+        // X
+        if triangle.v[0].position.x > triangle.v[0].position.w
+            && triangle.v[1].position.x > triangle.v[1].position.w
+            && triangle.v[2].position.x > triangle.v[2].position.w
+        {
+            return ClipResult::None;
+        }
+        if triangle.v[0].position.x < -triangle.v[0].position.w
+            && triangle.v[1].position.x < -triangle.v[1].position.w
+            && triangle.v[2].position.x < -triangle.v[2].position.w
+        {
+            return ClipResult::None;
+        }
+        // Y
+        if triangle.v[0].position.y > triangle.v[0].position.w
+            && triangle.v[1].position.y > triangle.v[1].position.w
+            && triangle.v[2].position.y > triangle.v[2].position.w
+        {
+            return ClipResult::None;
+        }
+        if triangle.v[0].position.y < -triangle.v[0].position.w
+            && triangle.v[1].position.y < -triangle.v[1].position.w
+            && triangle.v[2].position.y < -triangle.v[2].position.w
+        {
+            return ClipResult::None;
+        }
+        // Z
+        if triangle.v[0].position.z > triangle.v[0].position.w
+            && triangle.v[1].position.z > triangle.v[1].position.w
+            && triangle.v[2].position.z > triangle.v[2].position.w
+        {
+            return ClipResult::None;
+        }
+        if triangle.v[0].position.z < 0.0
+            && triangle.v[1].position.z < 0.0
+            && triangle.v[2].position.z < 0.0
+        {
+            return ClipResult::None;
+        }
+
+        ClipResult::One(*triangle)
+    }
+
     // rasterize textured triangle
-    pub fn raster_triangle(
+    pub fn raster_clipped_triangle(
         &mut self,
         v0: &Vertex,
         v1: &Vertex,
         v2: &Vertex,
         texture: Option<&Texture>,
-        camera: Option<&Camera>,
-        transform: Option<&Mat4>,
     ) {
-        let mut vertex = [(v0.clone(), 1.0), (v1.clone(), 1.0), (v2.clone(), 1.0)];
-        if let Some(cam) = camera {
-            if let Some(trsfr) = transform {
-                vertex = self.get_screen_vertices(cam, trsfr, v0, v1, v2);
-            } else {
-                vertex =
-                    self.get_screen_vertices(cam, &Transform::IDENTITY.get_local(), v0, v1, v2);
-            }
-        }
+        let vertex = self.get_screen_vertices(v0, v1, v2);
 
         let triangle_area = edge_function(
             vertex[0].0.position.xy(),
@@ -276,24 +295,32 @@ impl Screen {
         }
     }
 
-    pub fn raster_mesh(
+    pub fn raster_triangle(
         &mut self,
-        mesh: &Mesh,
-        transform: Option<&Mat4>,
+        v0: &Vertex,
+        v1: &Vertex,
+        v2: &Vertex,
         texture: Option<&Texture>,
-        camera: Option<&Camera>,
+        mvp: &Mat4,
     ) {
-        for triangle in mesh.get_triangles() {
-            let vertices = mesh.get_vertices_from_triangle(*triangle);
+        let triangle = Triangle { v: [*v0, *v1, *v2] };
+        let clip_tri = triangle.transform(mvp);
 
-            self.raster_triangle(
-                vertices[0],
-                vertices[1],
-                vertices[2],
-                texture,
-                camera,
-                transform,
-            );
+        match Self::view_frustum_culling(&clip_tri) {
+            ClipResult::None => {
+                println!("fully clipped!");
+            }
+            ClipResult::One(tri) => {
+                self.raster_clipped_triangle(&tri.v[0], &tri.v[1], &tri.v[2], texture);
+            }
+        }
+    }
+
+    pub fn raster_mesh(&mut self, mesh: &Mesh, mvp: &Mat4, texture: Option<&Texture>) {
+        for indecies in mesh.get_triangles() {
+            let vertices = mesh.get_vertices_from_triangle(*indecies);
+
+            self.raster_triangle(vertices[0], vertices[1], vertices[2], texture, mvp);
         }
     }
 }
