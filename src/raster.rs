@@ -168,6 +168,34 @@ impl Screen {
         ]
     }
 
+    // bounding box for triangles in screen space
+    pub fn triangle_screen_bounding_box(
+        positions: &[Vec2; 3],
+        viewport_size: Vec2,
+    ) -> Option<BoundingBox2D> {
+        let bb = get_triangle_bounding_box_2d(positions);
+
+        if bb.left >= viewport_size.x
+            || bb.right < 0.0
+            || bb.bottom >= viewport_size.y
+            || bb.top < 0.0
+        {
+            None
+        } else {
+            let left = bb.left.max(0.0);
+            let right = bb.right.min(viewport_size.x - 1.0);
+            let bottom = bb.bottom.max(0.0);
+            let top = bb.top.min(viewport_size.y - 1.0);
+
+            Some(BoundingBox2D {
+                left,
+                right,
+                top,
+                bottom,
+            })
+        }
+    }
+
     // rasterize textured triangle
     pub fn raster_triangle(
         &mut self,
@@ -194,42 +222,54 @@ impl Screen {
             vertex[2].0.position.xy(),
         );
 
-        for (i, pixel) in self.data.iter_mut().enumerate() {
-            let coords = from_index_coords(i, self.width);
-            let coords = glam::vec2(coords.0 as f32, coords.1 as f32) + 0.5;
-
-            let barycentric = barycentric_cordinates(
-                coords,
+        let viewport_size = glam::vec2(self.width as f32, self.height as f32);
+        if let Some(bb) = Self::triangle_screen_bounding_box(
+            &[
                 vertex[0].0.position.xy(),
                 vertex[1].0.position.xy(),
                 vertex[2].0.position.xy(),
-                triangle_area,
-            );
+            ],
+            viewport_size,
+        ) {
+            for y in (bb.top as usize)..(bb.bottom as usize) {
+                for x in (bb.left as usize)..(bb.right as usize) {
+                    let coords = glam::vec2(x as f32, y as f32) + 0.5;
+                    let pixel_id = from_coords_index(coords, viewport_size.x as usize);
 
-            let correction = barycentric.x * vertex[0].1
-                + barycentric.y * vertex[1].1
-                + barycentric.z * vertex[2].1;
+                    let barycentric = barycentric_cordinates(
+                        coords,
+                        vertex[0].0.position.xy(),
+                        vertex[1].0.position.xy(),
+                        vertex[2].0.position.xy(),
+                        triangle_area,
+                    );
 
-            let correction = 1.0 / correction;
+                    let correction = barycentric.x * vertex[0].1
+                        + barycentric.y * vertex[1].1
+                        + barycentric.z * vertex[2].1;
 
-            if barycentric.x >= 0.0 && barycentric.y >= 0.0 && barycentric.z >= 0.0 {
-                let depth = barycentric.x * vertex[0].0.position.z
-                    + barycentric.y * vertex[1].0.position.z
-                    + barycentric.z * vertex[2].0.position.z;
-                if depth < self.z_buffer[i] {
-                    self.z_buffer[i] = depth;
+                    let correction = 1.0 / correction;
 
-                    if let Some(tex) = texture {
-                        let tex_coords = barycentric.x * vertex[0].0.uv
-                            + barycentric.y * vertex[1].0.uv
-                            + barycentric.z * vertex[2].0.uv;
-                        let tex_coords = tex_coords * correction;
-                        *pixel = tex.sample_at_uv(tex_coords.x, tex_coords.y);
-                    } else {
-                        let color = barycentric.x * vertex[0].0.color
-                            + barycentric.y * vertex[1].0.color
-                            + barycentric.z * vertex[2].0.color;
-                        *pixel = from_rgb_u32(color * correction);
+                    if barycentric.x >= 0.0 && barycentric.y >= 0.0 && barycentric.z >= 0.0 {
+                        let depth = barycentric.x * vertex[0].0.position.z
+                            + barycentric.y * vertex[1].0.position.z
+                            + barycentric.z * vertex[2].0.position.z;
+                        if depth < self.z_buffer[pixel_id] {
+                            self.z_buffer[pixel_id] = depth;
+
+                            if let Some(tex) = texture {
+                                let tex_coords = barycentric.x * vertex[0].0.uv
+                                    + barycentric.y * vertex[1].0.uv
+                                    + barycentric.z * vertex[2].0.uv;
+                                let tex_coords = tex_coords * correction;
+                                self.data[pixel_id] = tex.sample_at_uv(tex_coords.x, tex_coords.y);
+                            } else {
+                                let color = barycentric.x * vertex[0].0.color
+                                    + barycentric.y * vertex[1].0.color
+                                    + barycentric.z * vertex[2].0.color;
+                                self.data[pixel_id] = from_rgb_u32(color * correction);
+                            }
+                        }
                     }
                 }
             }
