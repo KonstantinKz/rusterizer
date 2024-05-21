@@ -452,4 +452,18 @@ pub mod tests {
 
         screen.raster_mesh(&mesh, &mvp, Some(&texture));
     }
+
+    pub fn _test_gltf(screen: &mut Screen, rot: &mut f32, camera: &Camera, mesh: &Mesh) {
+        // Texture
+        let texture = Texture::load(Path::new("assets/bojan.jpg"));
+
+        *rot += 0.05;
+        let transform =
+            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, *rot, 0.0));
+        let projection = camera.projection();
+        let view = camera.view();
+        let mvp = projection * view * transform.get_local();
+
+        screen.raster_mesh(&mesh, &mvp, Some(&texture));
+    }
 }

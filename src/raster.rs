@@ -1,6 +1,6 @@
 use crate::texture::Texture;
 use crate::utils::{geometry::*, utils::*};
-use glam::{Mat4, Vec2, Vec3, Vec4Swizzles};
+use glam::{Mat4, UVec3, Vec2, Vec3, Vec4Swizzles};
 
 pub struct Screen {
     pub width: usize,

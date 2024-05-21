@@ -9,6 +9,7 @@ use crate::camera::Camera;
 use crate::transform::Transform;
 use minifb::{Key, Window, WindowOptions};
 use raster::Screen;
+use std::path::Path;
 use tests::tests::*;
 use utils::utils::*;
 
@@ -56,6 +57,8 @@ fn main() {
         ..Default::default()
     };
 
+    let mesh = load_gltf(Path::new("assets/gltf/teapot.gltf"));
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         screen.clear();
         process_camera_inputs(&window, &mut camera);
@@ -73,7 +76,8 @@ fn main() {
         //_test_camera(&mut screen, &mut rot);
         //_test_raster_mesh(&mut screen);
         //_test_textured_cube(&mut screen, &mut rot);
-        _test_camera_inputs(&mut screen, &mut rot, &camera);
+        //_test_camera_inputs(&mut screen, &mut rot, &camera);
+        _test_gltf(&mut screen, &mut rot, &camera, &mesh);
 
         window
             .update_with_buffer(&screen.data, WIDTH, HEIGHT)

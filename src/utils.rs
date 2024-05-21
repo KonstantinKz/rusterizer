@@ -9,6 +9,16 @@ pub mod geometry {
         pub uv: Vec2,
     }
 
+    impl Vertex {
+        pub fn create(position: Vec4, color: Vec3, uv: Vec2) -> Self {
+            Self {
+                position: position,
+                color: color,
+                uv: uv,
+            }
+        }
+    }
+
     #[derive(Copy, Clone)]
     pub struct Triangle {
         pub v: [Vertex; 3],
@@ -70,6 +80,63 @@ pub mod geometry {
             mesh.add_section_from_vertices(triangles, vertices);
             mesh
         }
+
+        pub fn add_section_from_buffers(
+            &mut self,
+            triangles: &[UVec3],
+            positions: &[Vec3],
+            colors: &[Vec3],
+            uvs: &[Vec2],
+        ) {
+            self.triangles.extend_from_slice(triangles);
+
+            let has_uvs = !uvs.is_empty();
+            let has_colors = !colors.is_empty();
+
+            for i in 0..positions.len() {
+                let vertex = Vertex::create(
+                    positions[i].extend(1.0),
+                    if has_colors { colors[i] } else { Vec3::ONE },
+                    if has_uvs { uvs[i] } else { Vec2::ZERO },
+                );
+                self.vertices.push(vertex)
+            }
+        }
+
+        pub fn from_gltf_mesh(mesh: &gltf::Mesh, buffers: &[gltf::buffer::Data]) -> Mesh {
+            let mut positions: Vec<Vec3> = Vec::new();
+            let mut tex_coords: Vec<Vec2> = Vec::new();
+            let mut indices = vec![];
+
+            let mut result = Mesh::create();
+            for primitive in mesh.primitives() {
+                let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+                if let Some(indices_reader) = reader.read_indices() {
+                    indices_reader.into_u32().for_each(|i| indices.push(i));
+                }
+                if let Some(positions_reader) = reader.read_positions() {
+                    positions_reader.for_each(|p| positions.push(Vec3::new(p[0], p[1], p[2])));
+                }
+                if let Some(tex_coord_reader) = reader.read_tex_coords(0) {
+                    tex_coord_reader
+                        .into_f32()
+                        .for_each(|tc| tex_coords.push(Vec2::new(tc[0], tc[1])));
+                }
+            }
+
+            let colors: Vec<Vec3> = positions.iter().map(|_| Vec3::ONE).collect();
+            println!("Num indices: {:?}", indices.len());
+            println!("tex_coords: {:?}", tex_coords.len());
+            println!("positions: {:?}", positions.len());
+
+            let triangles: Vec<UVec3> = indices
+                .chunks_exact(3)
+                .map(|tri| UVec3::new(tri[0], tri[1], tri[2]))
+                .collect();
+            result.add_section_from_buffers(&triangles, &positions, &colors, &tex_coords);
+
+            result
+        }
     }
 
     impl Default for Mesh {
@@ -101,7 +168,9 @@ pub mod geometry {
 }
 
 pub mod utils {
+    use crate::utils::geometry::Mesh;
     use glam::{Vec2, Vec3};
+    use std::path::Path;
 
     pub fn from_u8_rgb(r: u8, g: u8, b: u8) -> u32 {
         let (r, g, b) = (r as u32, g as u32, b as u32);
@@ -151,5 +220,35 @@ pub mod utils {
             + Copy,
     {
         b1 + (v - a1) * (b2 - b1) / (a2 - a1)
+    }
+
+    pub fn load_gltf(path: &Path) -> Mesh {
+        // handle loading textures, cameras, meshes here
+        let (document, buffers, _images) = gltf::import(path).unwrap();
+
+        for scene in document.scenes() {
+            for node in scene.nodes() {
+                println!(
+                    "Node #{} has {} children, camera: {:?}, mesh: {:?}, transform: {:?}",
+                    node.index(),
+                    node.children().count(),
+                    node.camera(),
+                    node.mesh().is_some(),
+                    node.transform(),
+                );
+                println!(
+                    "Node #{} has transform: trans {:?}, rot {:?}, scale {:?},",
+                    node.index(),
+                    node.transform().decomposed().0,
+                    node.transform().decomposed().1,
+                    node.transform().decomposed().2,
+                );
+                if let Some(mesh) = node.mesh() {
+                    return Mesh::from_gltf_mesh(&mesh, &buffers);
+                }
+            }
+        }
+
+        Mesh::create()
     }
 }
