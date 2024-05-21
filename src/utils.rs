@@ -1,7 +1,8 @@
 pub mod geometry {
     use glam::{Mat4, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
+    use std::ops::{Add, AddAssign, Mul, MulAssign, Sub};
 
-    // required for the extend_from_slice in the add_section_from_vertices
+    // Vertex
     #[derive(Debug, Copy, Clone)]
     pub struct Vertex {
         pub position: Vec4,
@@ -19,26 +20,102 @@ pub mod geometry {
         }
     }
 
-    #[derive(Copy, Clone)]
-    pub struct Triangle {
-        pub v: [Vertex; 3],
-    }
+    impl Add for Vertex {
+        type Output = Self;
 
-    impl Triangle {
-        pub fn transform(&self, matrix: &Mat4) -> Self {
-            let mut result = *self;
-            result.v[0].position = *matrix * self.v[0].position.xyz().extend(1.0);
-            result.v[1].position = *matrix * self.v[1].position.xyz().extend(1.0);
-            result.v[2].position = *matrix * self.v[2].position.xyz().extend(1.0);
-            result
+        fn add(self, rhs: Self) -> Self {
+            let position = self.position + rhs.position;
+            let color = self.color + rhs.color;
+            let uv = self.uv + rhs.uv;
+            Self {
+                position,
+                color,
+                uv,
+            }
         }
     }
 
-    pub enum ClipResult {
-        None,
-        One(Triangle),
+    impl Sub for Vertex {
+        type Output = Self;
+
+        fn sub(self, rhs: Self) -> Self {
+            let position = self.position - rhs.position;
+            let color = self.color - rhs.color;
+            let uv = self.uv - rhs.uv;
+            Self {
+                position,
+                color,
+                uv,
+            }
+        }
     }
 
+    impl Mul<f32> for Vertex {
+        type Output = Self;
+
+        fn mul(self, rhs: f32) -> Self {
+            let position = self.position * rhs;
+            let color = self.color * rhs;
+            let uv = self.uv * rhs;
+            Self {
+                position,
+                color,
+                uv,
+            }
+        }
+    }
+
+    impl MulAssign<f32> for Vertex {
+        fn mul_assign(&mut self, rhs: f32) {
+            self.position *= rhs;
+            self.color *= rhs;
+            self.uv *= rhs;
+        }
+    }
+
+    // Triangle
+    #[derive(Debug, Copy, Clone)]
+    pub struct Triangle {
+        pub v0: Vertex,
+        pub v1: Vertex,
+        pub v2: Vertex,
+    }
+
+    pub enum VerticesOrder {
+        ABC,
+        ACB,
+        BAC,
+        BCA,
+        CAB,
+        CBA,
+    }
+
+    impl Triangle {
+        pub fn create(v0: Vertex, v1: Vertex, v2: Vertex) -> Self {
+            Self { v0, v1, v2 }
+        }
+
+        pub fn transform(&self, matrix: &Mat4) -> Self {
+            let mut result = *self;
+            result.v0.position = *matrix * self.v0.position.xyz().extend(1.0);
+            result.v1.position = *matrix * self.v1.position.xyz().extend(1.0);
+            result.v2.position = *matrix * self.v2.position.xyz().extend(1.0);
+            result
+        }
+
+        pub fn reorder(&self, order: VerticesOrder) -> Self {
+            match order {
+                VerticesOrder::ABC => *self,
+                VerticesOrder::ACB => Self::create(self.v0, self.v2, self.v1),
+                VerticesOrder::BAC => Self::create(self.v1, self.v0, self.v2),
+                VerticesOrder::BCA => Self::create(self.v1, self.v2, self.v0),
+                VerticesOrder::CAB => Self::create(self.v2, self.v0, self.v1),
+                VerticesOrder::CBA => Self::create(self.v2, self.v1, self.v0),
+            }
+        }
+    }
+
+    // Mesh
     pub struct Mesh {
         pub triangles: Vec<UVec3>,
         pub vertices: Vec<Vertex>,
@@ -56,7 +133,7 @@ pub mod geometry {
             &self.triangles
         }
 
-        pub fn _get_vertices(&self) -> &Vec<Vertex> {
+        pub fn get_vertices(&self) -> &Vec<Vertex> {
             &self.vertices
         }
 
@@ -68,17 +145,17 @@ pub mod geometry {
             ]
         }
 
+        pub fn from_vertices(triangles: &[UVec3], vertices: &[Vertex]) -> Self {
+            let mut mesh = Mesh::create();
+            mesh.add_section_from_vertices(triangles, vertices);
+            mesh
+        }
+
         pub fn add_section_from_vertices(&mut self, triangles: &[UVec3], vertices: &[Vertex]) {
             let offset = self.vertices.len() as u32;
             let triangles: Vec<UVec3> = triangles.iter().map(|index| *index + offset).collect();
             self.triangles.extend_from_slice(&triangles);
             self.vertices.extend_from_slice(vertices);
-        }
-
-        pub fn from_vertices(triangles: &[UVec3], vertices: &[Vertex]) -> Self {
-            let mut mesh = Mesh::create();
-            mesh.add_section_from_vertices(triangles, vertices);
-            mesh
         }
 
         pub fn add_section_from_buffers(
@@ -145,6 +222,22 @@ pub mod geometry {
         }
     }
 
+    impl Add for Mesh {
+        type Output = Self;
+
+        fn add(self, rhs: Self) -> Self {
+            let mut result = Self::from_vertices(self.get_triangles(), self.get_vertices());
+            result.add_section_from_vertices(rhs.get_triangles(), rhs.get_vertices());
+            result
+        }
+    }
+
+    impl AddAssign for Mesh {
+        fn add_assign(&mut self, rhs: Self) {
+            self.add_section_from_vertices(rhs.get_triangles(), rhs.get_vertices());
+        }
+    }
+
     pub struct BoundingBox2D {
         pub left: f32,
         pub right: f32,
@@ -202,13 +295,24 @@ pub mod utils {
         seg_a.x * seg_b.y - seg_a.y * seg_b.x
     }
 
-    pub fn barycentric_cordinates(pos: Vec2, v0: Vec2, v1: Vec2, v2: Vec2, area: f32) -> Vec3 {
-        let ef0 = edge_function(pos, v1, v2);
-        let ef1 = edge_function(pos, v2, v0);
-        let ef2 = edge_function(pos, v0, v1);
+    pub fn barycentric_coordinates(
+        pos: Vec2,
+        v0: Vec2,
+        v1: Vec2,
+        v2: Vec2,
+        area: f32,
+    ) -> Option<Vec3> {
+        let area_res = 1.0 / area;
 
-        let res = 1.0 / area;
-        Vec3::new(ef0 * res, ef1 * res, ef2 * res)
+        let ef0 = edge_function(pos, v1, v2) * area_res;
+        let ef1 = edge_function(pos, v2, v0) * area_res;
+        let ef2 = 1.0 - ef0 - ef1;
+
+        if ef0 >= 0.0 && ef1 >= 0.0 && ef2 >= 0.0 {
+            Some(glam::vec3(ef0, ef1, ef2))
+        } else {
+            None
+        }
     }
 
     pub fn map_to_range<T>(v: T, a1: T, a2: T, b1: T, b2: T) -> T
@@ -250,5 +354,15 @@ pub mod utils {
         }
 
         Mesh::create()
+    }
+
+    pub fn lerp<T>(start: T, end: T, alpha: f32) -> T
+    where
+        T: std::ops::Sub<Output = T>
+            + std::ops::Mul<f32, Output = T>
+            + std::ops::Add<Output = T>
+            + Copy,
+    {
+        start + (end - start) * alpha
     }
 }

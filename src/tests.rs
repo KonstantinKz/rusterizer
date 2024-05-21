@@ -136,7 +136,9 @@ pub mod tests {
         let view = camera.view();
         let mvp = proj * view * Transform::IDENTITY.get_local();
 
-        screen.raster_triangle(&v0, &v1, &v2, Some(&texture), &mvp);
+        let triangle = [&v0, &v1, &v2];
+
+        screen.raster_triangle(&triangle, Some(&texture), &mvp);
     }
 
     pub fn _test_textured_quad(screen: &mut Screen) {
@@ -179,8 +181,11 @@ pub mod tests {
         let view = camera.view();
         let mvp = proj * view * Transform::IDENTITY.get_local();
 
-        screen.raster_triangle(&v0, &v2, &v1, Some(&texture), &mvp);
-        screen.raster_triangle(&v0, &v3, &v2, Some(&texture), &mvp);
+        let triangle0 = [&v0, &v2, &v1];
+        let triangle1 = [&v0, &v3, &v2];
+
+        screen.raster_triangle(&triangle0, Some(&texture), &mvp);
+        screen.raster_triangle(&triangle1, Some(&texture), &mvp);
     }
 
     pub fn _test_camera(screen: &mut Screen, rot: &mut f32) {
@@ -228,8 +233,11 @@ pub mod tests {
 
         let mvp = proj * view * transform.get_local();
 
-        screen.raster_triangle(&v0, &v2, &v1, Some(&texture), &mvp);
-        screen.raster_triangle(&v0, &v3, &v2, Some(&texture), &mvp);
+        let triangle0 = [&v0, &v2, &v1];
+        let triangle1 = [&v0, &v3, &v2];
+
+        screen.raster_triangle(&triangle0, Some(&texture), &mvp);
+        screen.raster_triangle(&triangle1, Some(&texture), &mvp);
     }
 
     pub fn _test_raster_mesh(screen: &mut Screen) {
@@ -454,16 +462,13 @@ pub mod tests {
     }
 
     pub fn _test_gltf(screen: &mut Screen, rot: &mut f32, camera: &Camera, mesh: &Mesh) {
-        // Texture
-        let texture = Texture::load(Path::new("assets/bojan.jpg"));
-
         *rot += 0.05;
         let transform =
-            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, *rot, 0.0));
+            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, *rot, *rot, 0.0));
         let projection = camera.projection();
         let view = camera.view();
         let mvp = projection * view * transform.get_local();
 
-        screen.raster_mesh(&mesh, &mvp, Some(&texture));
+        screen.raster_mesh(&mesh, &mvp, None);
     }
 }

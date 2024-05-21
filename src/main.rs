@@ -51,6 +51,7 @@ fn main() {
     let aspect_ratio = WIDTH as f32 / HEIGHT as f32;
     let mut camera = Camera {
         far_plane: 100.0,
+        near_plane: 4.0,
         aspect_ratio: aspect_ratio,
         transform: Transform::from_translation(glam::vec3(0.0, 0.0, 5.0)),
         speed: 0.5,

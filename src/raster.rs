@@ -1,12 +1,18 @@
 use crate::texture::Texture;
 use crate::utils::{geometry::*, utils::*};
-use glam::{Mat4, UVec3, Vec2, Vec3, Vec4Swizzles};
+use glam::{Mat4, Vec2, Vec3, Vec4Swizzles};
 
 pub struct Screen {
     pub width: usize,
     pub height: usize,
     pub data: Vec<u32>,
     pub z_buffer: Vec<f32>,
+}
+
+pub enum ClipResult {
+    None,
+    One(Triangle),
+    Two((Triangle, Triangle)),
 }
 
 impl Screen {
@@ -104,7 +110,7 @@ impl Screen {
             let coords = from_index_coords(i, self.width);
             let coords = glam::vec2(coords.0 as f32, coords.1 as f32) + 0.5;
 
-            let barycentric = barycentric_cordinates(
+            let barycentric = barycentric_coordinates(
                 coords,
                 v0.position.xy(),
                 v1.position.xy(),
@@ -113,45 +119,14 @@ impl Screen {
             );
 
             let mut color: Vec3 = glam::vec3(0.0, 0.0, 0.0);
-            if barycentric.x >= 0.0 && barycentric.y >= 0.0 && barycentric.z >= 0.0 {
-                color =
-                    barycentric.x * v0.color + barycentric.y * v1.color + barycentric.z * v2.color;
+            if let Some(bary) = barycentric {
+                color = bary.x * v0.color + bary.y * v1.color + bary.z * v2.color;
             }
             *pixel = from_rgb_u32(color);
         }
     }
 
-    // returns new vertex and reciprocal
-    pub fn process_vertex(v: &Vertex, viewport: Vec2) -> (Vertex, f32) {
-        let rec = 1.0 / v.position.w;
-
-        let uv = v.uv * rec;
-        let color = v.color * rec;
-        let ndc = v.position * rec;
-
-        (
-            Vertex {
-                position: glam::vec4(
-                    map_to_range(ndc.x, -1.0, 1.0, 0.0, viewport.x),
-                    map_to_range(-ndc.y, -1.0, 1.0, 0.0, viewport.y),
-                    ndc.z,
-                    1.0,
-                ),
-                color: color,
-                uv: uv,
-            },
-            rec,
-        )
-    }
-
-    pub fn get_screen_vertices(&self, v0: &Vertex, v1: &Vertex, v2: &Vertex) -> [(Vertex, f32); 3] {
-        let viewport_size = glam::vec2(self.width as f32, self.height as f32);
-        [
-            Self::process_vertex(v0, viewport_size),
-            Self::process_vertex(v1, viewport_size),
-            Self::process_vertex(v2, viewport_size),
-        ]
-    }
+    // Culling
 
     // bounding box for triangles in screen space
     pub fn triangle_screen_bounding_box(
@@ -181,113 +156,209 @@ impl Screen {
         }
     }
 
-    pub fn view_frustum_culling(triangle: &Triangle) -> ClipResult {
+    pub fn view_frustum_culling(triangle: &Triangle) -> bool {
         // X
-        if triangle.v[0].position.x > triangle.v[0].position.w
-            && triangle.v[1].position.x > triangle.v[1].position.w
-            && triangle.v[2].position.x > triangle.v[2].position.w
+        if triangle.v0.position.x > triangle.v0.position.w
+            && triangle.v1.position.x > triangle.v1.position.w
+            && triangle.v2.position.x > triangle.v2.position.w
         {
-            return ClipResult::None;
+            return true;
         }
-        if triangle.v[0].position.x < -triangle.v[0].position.w
-            && triangle.v[1].position.x < -triangle.v[1].position.w
-            && triangle.v[2].position.x < -triangle.v[2].position.w
+        if triangle.v0.position.x < -triangle.v0.position.w
+            && triangle.v1.position.x < -triangle.v1.position.w
+            && triangle.v2.position.x < -triangle.v2.position.w
         {
-            return ClipResult::None;
+            return true;
         }
-        // Y
-        if triangle.v[0].position.y > triangle.v[0].position.w
-            && triangle.v[1].position.y > triangle.v[1].position.w
-            && triangle.v[2].position.y > triangle.v[2].position.w
+        //Y
+        if triangle.v0.position.y > triangle.v0.position.w
+            && triangle.v1.position.y > triangle.v1.position.w
+            && triangle.v2.position.y > triangle.v2.position.w
         {
-            return ClipResult::None;
+            return true;
         }
-        if triangle.v[0].position.y < -triangle.v[0].position.w
-            && triangle.v[1].position.y < -triangle.v[1].position.w
-            && triangle.v[2].position.y < -triangle.v[2].position.w
+        if triangle.v0.position.y < -triangle.v0.position.w
+            && triangle.v1.position.y < -triangle.v1.position.w
+            && triangle.v2.position.y < -triangle.v2.position.w
         {
-            return ClipResult::None;
+            return true;
         }
-        // Z
-        if triangle.v[0].position.z > triangle.v[0].position.w
-            && triangle.v[1].position.z > triangle.v[1].position.w
-            && triangle.v[2].position.z > triangle.v[2].position.w
+        //Z
+        if triangle.v0.position.z > triangle.v0.position.w
+            && triangle.v1.position.z > triangle.v1.position.w
+            && triangle.v2.position.z > triangle.v2.position.w
         {
-            return ClipResult::None;
+            return true;
         }
-        if triangle.v[0].position.z < 0.0
-            && triangle.v[1].position.z < 0.0
-            && triangle.v[2].position.z < 0.0
+        if triangle.v0.position.z < 0.0
+            && triangle.v1.position.z < 0.0
+            && triangle.v2.position.z < 0.0
         {
-            return ClipResult::None;
+            return true;
         }
 
-        ClipResult::One(*triangle)
+        false
+    }
+
+    pub fn clip_triangle_two(triangle: &Triangle) -> (Triangle, Triangle) {
+        // calculate alpha values for getting adjusted vertices
+        let alpha_a = (-triangle.v0.position.z) / (triangle.v1.position.z - triangle.v0.position.z);
+        let alpha_b = (-triangle.v0.position.z) / (triangle.v2.position.z - triangle.v0.position.z);
+
+        // interpolate to get v0a and v0b
+        let v0_a = lerp(triangle.v0, triangle.v1, alpha_a);
+        let v0_b = lerp(triangle.v0, triangle.v2, alpha_b);
+
+        // draw triangles
+        let mut result_a = *triangle;
+        let mut result_b = *triangle;
+
+        result_a.v0 = v0_a;
+
+        result_b.v0 = v0_a;
+        result_b.v1 = v0_b;
+
+        let green = Vec3::new(0.0, 1.0, 0.0);
+        let blue = Vec3::new(0.0, 0.0, 1.0);
+
+        result_a.v0.color = green;
+        result_a.v1.color = green;
+        result_a.v2.color = green;
+        result_b.v0.color = blue;
+        result_b.v1.color = blue;
+        result_b.v2.color = blue;
+
+        (result_a, result_b)
+    }
+
+    pub fn clip_triangle_one(triangle: &Triangle) -> Triangle {
+        // calculate alpha values for getting adjusted vertices
+        let alpha_a = (-triangle.v0.position.z) / (triangle.v2.position.z - triangle.v0.position.z);
+        let alpha_b = (-triangle.v1.position.z) / (triangle.v2.position.z - triangle.v1.position.z);
+
+        // interpolate to get v0a and v0b
+        let mut v0 = lerp(triangle.v0, triangle.v2, alpha_a);
+        let mut v1 = lerp(triangle.v1, triangle.v2, alpha_b);
+
+        let mut v2 = triangle.v2;
+
+        let red = Vec3::new(1.0, 0.0, 0.0);
+
+        v0.color = red;
+        v1.color = red;
+        v2.color = red;
+
+        Triangle { v0, v1, v2 }
+    }
+
+    pub fn cull_triangle_backface(triangle: &Triangle) -> bool {
+        let normal = (triangle.v1.position.xyz() - triangle.v0.position.xyz())
+            .cross(triangle.v2.position.xyz() - triangle.v0.position.xyz());
+        // any is vertex valid
+        let view_dir = -Vec3::Z;
+        // also we don't care about normalizing
+        // if negative facing the camera
+        normal.dot(view_dir) >= 0.0
+    }
+
+    pub fn clip_cull_triangle(triangle: &Triangle) -> ClipResult {
+        if Self::cull_triangle_backface(triangle) {
+            return ClipResult::None;
+        }
+        if Self::view_frustum_culling(triangle) {
+            ClipResult::None
+        } else {
+            // clipping routines
+            if triangle.v0.position.z < 0.0 {
+                if triangle.v1.position.z < 0.0 {
+                    ClipResult::One(Self::clip_triangle_one(triangle))
+                } else if triangle.v2.position.z < 0.0 {
+                    ClipResult::One(Self::clip_triangle_one(
+                        &triangle.reorder(VerticesOrder::ACB),
+                    ))
+                } else {
+                    ClipResult::Two(Self::clip_triangle_two(
+                        &triangle.reorder(VerticesOrder::ACB),
+                    ))
+                }
+            } else if triangle.v1.position.z < 0.0 {
+                if triangle.v2.position.z < 0.0 {
+                    ClipResult::One(Self::clip_triangle_one(
+                        &triangle.reorder(VerticesOrder::BCA),
+                    ))
+                } else {
+                    ClipResult::Two(Self::clip_triangle_two(
+                        &triangle.reorder(VerticesOrder::BAC),
+                    ))
+                }
+            } else if triangle.v2.position.z < 0.0 {
+                ClipResult::Two(Self::clip_triangle_two(
+                    &triangle.reorder(VerticesOrder::CBA),
+                ))
+            } else {
+                // no near clipping necessary
+                //return original
+                ClipResult::One(*triangle)
+            }
+        }
     }
 
     // rasterize textured triangle
-    pub fn raster_clipped_triangle(
-        &mut self,
-        v0: &Vertex,
-        v1: &Vertex,
-        v2: &Vertex,
-        texture: Option<&Texture>,
-    ) {
-        let vertex = self.get_screen_vertices(v0, v1, v2);
+    pub fn raster_clipped_triangle(&mut self, clip_triangle: &Triangle, texture: Option<&Texture>) {
+        let viewport_size = glam::vec2(self.width as f32, self.height as f32);
 
-        let triangle_area = edge_function(
-            vertex[0].0.position.xy(),
-            vertex[1].0.position.xy(),
-            vertex[2].0.position.xy(),
+        let rec0 = 1.0 / clip_triangle.v0.position.w;
+        let rec1 = 1.0 / clip_triangle.v1.position.w;
+        let rec2 = 1.0 / clip_triangle.v2.position.w;
+
+        // This would be the output of the vertex shader (clip space)
+        // then we perform perspective division to transform in ndc
+        // now x,y,z componend of ndc are between -1 and 1
+        let ndc0 = clip_triangle.v0.position * rec0;
+        let ndc1 = clip_triangle.v1.position * rec1;
+        let ndc2 = clip_triangle.v2.position * rec2;
+
+        // perspective division on all attributes
+        let v0 = clip_triangle.v0 * rec0;
+        let v1 = clip_triangle.v1 * rec1;
+        let v2 = clip_triangle.v2 * rec2;
+
+        // screeen coordinates remapped to window
+        let sc0 = glam::vec2(
+            map_to_range(ndc0.x, -1.0, 1.0, 0.0, viewport_size.x),
+            map_to_range(-ndc0.y, -1.0, 1.0, 0.0, viewport_size.y),
+        );
+        let sc1 = glam::vec2(
+            map_to_range(ndc1.x, -1.0, 1.0, 0.0, viewport_size.x),
+            map_to_range(-ndc1.y, -1.0, 1.0, 0.0, viewport_size.y),
+        );
+        let sc2 = glam::vec2(
+            map_to_range(ndc2.x, -1.0, 1.0, 0.0, viewport_size.x),
+            map_to_range(-ndc2.y, -1.0, 1.0, 0.0, viewport_size.y),
         );
 
-        let viewport_size = glam::vec2(self.width as f32, self.height as f32);
-        if let Some(bb) = Self::triangle_screen_bounding_box(
-            &[
-                vertex[0].0.position.xy(),
-                vertex[1].0.position.xy(),
-                vertex[2].0.position.xy(),
-            ],
-            viewport_size,
-        ) {
-            for y in (bb.top as usize)..(bb.bottom as usize) {
-                for x in (bb.left as usize)..(bb.right as usize) {
+        if let Some(bb) = Self::triangle_screen_bounding_box(&[sc0, sc1, sc2], viewport_size) {
+            for y in (bb.top as usize)..=bb.bottom as usize {
+                for x in (bb.left as usize)..=bb.right as usize {
                     let coords = glam::vec2(x as f32, y as f32) + 0.5;
                     let pixel_id = from_coords_index(coords, viewport_size.x as usize);
+                    let area = edge_function(sc0, sc1, sc2);
 
-                    let barycentric = barycentric_cordinates(
-                        coords,
-                        vertex[0].0.position.xy(),
-                        vertex[1].0.position.xy(),
-                        vertex[2].0.position.xy(),
-                        triangle_area,
-                    );
-
-                    let correction = barycentric.x * vertex[0].1
-                        + barycentric.y * vertex[1].1
-                        + barycentric.z * vertex[2].1;
-
-                    let correction = 1.0 / correction;
-
-                    if barycentric.x >= 0.0 && barycentric.y >= 0.0 && barycentric.z >= 0.0 {
-                        let depth = barycentric.x * vertex[0].0.position.z
-                            + barycentric.y * vertex[1].0.position.z
-                            + barycentric.z * vertex[2].0.position.z;
+                    if let Some(bary) = barycentric_coordinates(coords, sc0, sc1, sc2, area) {
+                        let correction = bary.x * rec0 + bary.y * rec1 + bary.z * rec2;
+                        let correction = 1.0 / correction;
+                        let depth = bary.x * ndc0.z + bary.y * ndc1.z + bary.z * ndc2.z;
                         if depth < self.z_buffer[pixel_id] {
                             self.z_buffer[pixel_id] = depth;
 
+                            let color = bary.x * v0.color + bary.y * v1.color + bary.z * v2.color;
+                            let mut color = from_rgb_u32(color * correction);
                             if let Some(tex) = texture {
-                                let tex_coords = barycentric.x * vertex[0].0.uv
-                                    + barycentric.y * vertex[1].0.uv
-                                    + barycentric.z * vertex[2].0.uv;
+                                let tex_coords = bary.x * v0.uv + bary.y * v1.uv + bary.z * v2.uv;
                                 let tex_coords = tex_coords * correction;
-                                self.data[pixel_id] = tex.sample_at_uv(tex_coords.x, tex_coords.y);
-                            } else {
-                                let color = barycentric.x * vertex[0].0.color
-                                    + barycentric.y * vertex[1].0.color
-                                    + barycentric.z * vertex[2].0.color;
-                                self.data[pixel_id] = from_rgb_u32(color * correction);
+                                color = tex.sample_at_uv(tex_coords.x, tex_coords.y);
                             }
+                            self.data[pixel_id] = color;
                         }
                     }
                 }
@@ -297,21 +368,25 @@ impl Screen {
 
     pub fn raster_triangle(
         &mut self,
-        v0: &Vertex,
-        v1: &Vertex,
-        v2: &Vertex,
+        vertices: &[&Vertex; 3],
         texture: Option<&Texture>,
         mvp: &Mat4,
     ) {
-        let triangle = Triangle { v: [*v0, *v1, *v2] };
+        let triangle = Triangle {
+            v0: *vertices[0],
+            v1: *vertices[1],
+            v2: *vertices[2],
+        };
         let clip_tri = triangle.transform(mvp);
 
-        match Self::view_frustum_culling(&clip_tri) {
-            ClipResult::None => {
-                println!("fully clipped!");
-            }
+        match Self::clip_cull_triangle(&clip_tri) {
+            ClipResult::None => {}
             ClipResult::One(tri) => {
-                self.raster_clipped_triangle(&tri.v[0], &tri.v[1], &tri.v[2], texture);
+                self.raster_clipped_triangle(&tri, texture);
+            }
+            ClipResult::Two(tri) => {
+                self.raster_clipped_triangle(&tri.0, texture);
+                self.raster_clipped_triangle(&tri.1, texture);
             }
         }
     }
@@ -320,7 +395,7 @@ impl Screen {
         for indecies in mesh.get_triangles() {
             let vertices = mesh.get_vertices_from_triangle(*indecies);
 
-            self.raster_triangle(vertices[0], vertices[1], vertices[2], texture, mvp);
+            self.raster_triangle(&vertices, texture, mvp);
         }
     }
 }
