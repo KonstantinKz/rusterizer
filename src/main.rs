@@ -6,6 +6,7 @@ mod transform;
 mod utils;
 
 use crate::camera::Camera;
+use crate::texture::Texture;
 use crate::transform::Transform;
 use minifb::{Key, Window, WindowOptions};
 use raster::Screen;
@@ -51,14 +52,15 @@ fn main() {
     let aspect_ratio = WIDTH as f32 / HEIGHT as f32;
     let mut camera = Camera {
         far_plane: 100.0,
-        near_plane: 4.0,
+        near_plane: 0.1,
         aspect_ratio: aspect_ratio,
         transform: Transform::from_translation(glam::vec3(0.0, 0.0, 5.0)),
         speed: 0.5,
         ..Default::default()
     };
 
-    let mesh = load_gltf(Path::new("assets/gltf/teapot.gltf"));
+    let texture = Texture::load(Path::new("assets/gltf/Default_albedo.jpg"));
+    let mesh = load_gltf(Path::new("assets/gltf/DamagedHelmet.gltf"));
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         screen.clear();
@@ -78,7 +80,8 @@ fn main() {
         //_test_raster_mesh(&mut screen);
         //_test_textured_cube(&mut screen, &mut rot);
         //_test_camera_inputs(&mut screen, &mut rot, &camera);
-        _test_gltf(&mut screen, &mut rot, &camera, &mesh);
+        // _test_gltf(&mut screen, &mut rot, &camera, &mesh);
+        _test_gltf_textured(&mut screen, &mut rot, &camera, &mesh, &texture);
 
         window
             .update_with_buffer(&screen.data, WIDTH, HEIGHT)

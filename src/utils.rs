@@ -7,15 +7,17 @@ pub mod geometry {
     pub struct Vertex {
         pub position: Vec4,
         pub color: Vec3,
+        pub normal: Vec3,
         pub uv: Vec2,
     }
 
     impl Vertex {
-        pub fn create(position: Vec4, color: Vec3, uv: Vec2) -> Self {
+        pub fn create(position: Vec4, color: Vec3, normal: Vec3, uv: Vec2) -> Self {
             Self {
-                position: position,
-                color: color,
-                uv: uv,
+                position,
+                color,
+                normal,
+                uv,
             }
         }
     }
@@ -26,10 +28,12 @@ pub mod geometry {
         fn add(self, rhs: Self) -> Self {
             let position = self.position + rhs.position;
             let color = self.color + rhs.color;
+            let normal = self.normal + rhs.normal;
             let uv = self.uv + rhs.uv;
             Self {
                 position,
                 color,
+                normal,
                 uv,
             }
         }
@@ -41,10 +45,12 @@ pub mod geometry {
         fn sub(self, rhs: Self) -> Self {
             let position = self.position - rhs.position;
             let color = self.color - rhs.color;
+            let normal = self.normal - rhs.normal;
             let uv = self.uv - rhs.uv;
             Self {
                 position,
                 color,
+                normal,
                 uv,
             }
         }
@@ -56,10 +62,12 @@ pub mod geometry {
         fn mul(self, rhs: f32) -> Self {
             let position = self.position * rhs;
             let color = self.color * rhs;
+            let normal = self.normal * rhs;
             let uv = self.uv * rhs;
             Self {
                 position,
                 color,
+                normal,
                 uv,
             }
         }
@@ -69,6 +77,7 @@ pub mod geometry {
         fn mul_assign(&mut self, rhs: f32) {
             self.position *= rhs;
             self.color *= rhs;
+            self.normal *= rhs;
             self.uv *= rhs;
         }
     }
@@ -163,17 +172,20 @@ pub mod geometry {
             triangles: &[UVec3],
             positions: &[Vec3],
             colors: &[Vec3],
+            normals: &[Vec3],
             uvs: &[Vec2],
         ) {
             self.triangles.extend_from_slice(triangles);
 
             let has_uvs = !uvs.is_empty();
             let has_colors = !colors.is_empty();
+            let has_normals = !normals.is_empty();
 
             for i in 0..positions.len() {
                 let vertex = Vertex::create(
                     positions[i].extend(1.0),
                     if has_colors { colors[i] } else { Vec3::ONE },
+                    if has_normals { normals[i] } else { Vec3::ONE },
                     if has_uvs { uvs[i] } else { Vec2::ZERO },
                 );
                 self.vertices.push(vertex)
@@ -183,6 +195,7 @@ pub mod geometry {
         pub fn from_gltf_mesh(mesh: &gltf::Mesh, buffers: &[gltf::buffer::Data]) -> Mesh {
             let mut positions: Vec<Vec3> = Vec::new();
             let mut tex_coords: Vec<Vec2> = Vec::new();
+            let mut normals: Vec<Vec3> = Vec::new();
             let mut indices = vec![];
 
             let mut result = Mesh::create();
@@ -199,18 +212,22 @@ pub mod geometry {
                         .into_f32()
                         .for_each(|tc| tex_coords.push(Vec2::new(tc[0], tc[1])));
                 }
+                if let Some(normals_reader) = reader.read_normals() {
+                    normals_reader.for_each(|p| normals.push(Vec3::new(p[0], p[1], p[2])));
+                }
             }
 
             let colors: Vec<Vec3> = positions.iter().map(|_| Vec3::ONE).collect();
             println!("Num indices: {:?}", indices.len());
             println!("tex_coords: {:?}", tex_coords.len());
             println!("positions: {:?}", positions.len());
+            println!("normals: {:?}", normals.len());
 
             let triangles: Vec<UVec3> = indices
                 .chunks_exact(3)
                 .map(|tri| UVec3::new(tri[0], tri[1], tri[2]))
                 .collect();
-            result.add_section_from_buffers(&triangles, &positions, &colors, &tex_coords);
+            result.add_section_from_buffers(&triangles, &positions, &colors, &normals, &tex_coords);
 
             result
         }
@@ -262,12 +279,19 @@ pub mod geometry {
 
 pub mod utils {
     use crate::utils::geometry::Mesh;
-    use glam::{Vec2, Vec3};
+    use glam::{Mat4, Vec2, Vec3};
     use std::path::Path;
 
     pub fn from_u8_rgb(r: u8, g: u8, b: u8) -> u32 {
         let (r, g, b) = (r as u32, g as u32, b as u32);
         (r << 16) | (g << 8) | b
+    }
+
+    pub fn from_u32_u8(color: u32) -> (u8, u8, u8) {
+        let r: u8 = (color >> 16) as u8;
+        let g: u8 = (color >> 8) as u8;
+        let b: u8 = color as u8;
+        (r, g, b)
     }
 
     pub fn from_rgb_u32(color: Vec3) -> u32 {
@@ -364,5 +388,45 @@ pub mod utils {
             + Copy,
     {
         start + (end - start) * alpha
+    }
+
+    //https://github.com/graphitemaster/normals_revisited
+    pub fn minor(
+        src: &[f32; 16],
+        r0: usize,
+        r1: usize,
+        r2: usize,
+        c0: usize,
+        c1: usize,
+        c2: usize,
+    ) -> f32 {
+        src[4 * r0 + c0]
+            * (src[4 * r1 + c1] * src[4 * r2 + c2] - src[4 * r2 + c1] * src[4 * r1 + c2])
+            - src[4 * r0 + c1]
+                * (src[4 * r1 + c0] * src[4 * r2 + c2] - src[4 * r2 + c0] * src[4 * r1 + c2])
+            + src[4 * r0 + c2]
+                * (src[4 * r1 + c0] * src[4 * r2 + c1] - src[4 * r2 + c0] * src[4 * r1 + c1])
+    }
+
+    pub fn cofactor(matrix: &Mat4) -> Mat4 {
+        let src: [f32; 16] = matrix.to_cols_array();
+        let mut dst: [f32; 16] = [0.0; 16];
+        dst[0] = minor(&src, 1, 2, 3, 1, 2, 3);
+        dst[1] = -minor(&src, 1, 2, 3, 0, 2, 3);
+        dst[2] = minor(&src, 1, 2, 3, 0, 1, 3);
+        dst[3] = -minor(&src, 1, 2, 3, 0, 1, 2);
+        dst[4] = -minor(&src, 0, 2, 3, 1, 2, 3);
+        dst[5] = minor(&src, 0, 2, 3, 0, 2, 3);
+        dst[6] = -minor(&src, 0, 2, 3, 0, 1, 3);
+        dst[7] = minor(&src, 0, 2, 3, 0, 1, 2);
+        dst[8] = minor(&src, 0, 1, 3, 1, 2, 3);
+        dst[9] = -minor(&src, 0, 1, 3, 0, 2, 3);
+        dst[10] = minor(&src, 0, 1, 3, 0, 1, 3);
+        dst[11] = -minor(&src, 0, 1, 3, 0, 1, 2);
+        dst[12] = -minor(&src, 0, 1, 2, 1, 2, 3);
+        dst[13] = minor(&src, 0, 1, 2, 0, 2, 3);
+        dst[14] = -minor(&src, 0, 1, 2, 0, 1, 3);
+        dst[15] = minor(&src, 0, 1, 2, 0, 1, 2);
+        Mat4::from_cols_array(&dst)
     }
 }

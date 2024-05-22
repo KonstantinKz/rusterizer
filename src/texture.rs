@@ -1,7 +1,8 @@
 use stb_image;
 use std::path::Path;
 
-use crate::{from_coords_index, from_u8_rgb};
+use crate::{from_coords_index, from_u32_u8, from_u8_rgb};
+use glam::Vec3;
 
 pub struct Texture {
     pub width: usize,
@@ -34,15 +35,30 @@ impl Texture {
         }
     }
 
-    pub fn sample_at_uv(&self, u: f32, v: f32) -> u32 {
-        let mapped_u = u * self.width as f32;
-        let mapped_v = v * self.height as f32;
+    pub fn uv_to_index(&self, u: f32, v: f32) -> usize {
+        let (u, v) = (u * self.width as f32, v * self.height as f32);
+        let (u, v) = (
+            ((u as usize) % self.width) as f32,
+            ((v as usize) % self.height) as f32,
+        );
+        from_coords_index(glam::vec2(u, v), self.width)
+    }
 
-        let index = from_coords_index(glam::vec2(mapped_u, mapped_v), self.width);
+    pub fn sample_at_uv(&self, u: f32, v: f32) -> u32 {
+        let index = self.uv_to_index(u, v);
         if index < self.data.len() {
             self.data[index]
         } else {
-            0
+            from_u8_rgb(255, 0, 255)
         }
+    }
+
+    pub fn sample_at_uv_rgb(&self, u: f32, v: f32) -> Vec3 {
+        let color = from_u32_u8(self.sample_at_uv(u, v));
+        Vec3::new(
+            (color.0 as f32) / 255.0,
+            (color.1 as f32) / 255.0,
+            (color.2 as f32) / 255.0,
+        )
     }
 }

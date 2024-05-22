@@ -351,14 +351,22 @@ impl Screen {
                         if depth < self.z_buffer[pixel_id] {
                             self.z_buffer[pixel_id] = depth;
 
+                            let normal =
+                                bary.x * v0.normal + bary.y * v1.normal + bary.z * v2.normal;
+                            let normal = normal * correction;
+                            let n_dot_l = normal.dot(Vec3::ONE.normalize());
+
                             let color = bary.x * v0.color + bary.y * v1.color + bary.z * v2.color;
-                            let mut color = from_rgb_u32(color * correction);
+                            let mut output = color * correction;
                             if let Some(tex) = texture {
                                 let tex_coords = bary.x * v0.uv + bary.y * v1.uv + bary.z * v2.uv;
                                 let tex_coords = tex_coords * correction;
-                                color = tex.sample_at_uv(tex_coords.x, tex_coords.y);
+                                output = tex.sample_at_uv_rgb(tex_coords.x, tex_coords.y);
                             }
-                            self.data[pixel_id] = color;
+
+                            let ambient = glam::vec3(0.2, 0.2, 0.2);
+                            output = output * n_dot_l + ambient;
+                            self.data[pixel_id] = from_rgb_u32(output);
                         }
                     }
                 }
@@ -371,13 +379,18 @@ impl Screen {
         vertices: &[&Vertex; 3],
         texture: Option<&Texture>,
         mvp: &Mat4,
+        model: &Mat4,
     ) {
+        let cof_model = cofactor(model);
         let triangle = Triangle {
             v0: *vertices[0],
             v1: *vertices[1],
             v2: *vertices[2],
         };
-        let clip_tri = triangle.transform(mvp);
+        let mut clip_tri = triangle.transform(mvp);
+        clip_tri.v0.normal = (cof_model * clip_tri.v0.normal.extend(0.0)).xyz();
+        clip_tri.v1.normal = (cof_model * clip_tri.v1.normal.extend(0.0)).xyz();
+        clip_tri.v2.normal = (cof_model * clip_tri.v2.normal.extend(0.0)).xyz();
 
         match Self::clip_cull_triangle(&clip_tri) {
             ClipResult::None => {}
@@ -391,11 +404,17 @@ impl Screen {
         }
     }
 
-    pub fn raster_mesh(&mut self, mesh: &Mesh, mvp: &Mat4, texture: Option<&Texture>) {
+    pub fn raster_mesh(
+        &mut self,
+        mesh: &Mesh,
+        mvp: &Mat4,
+        model: &Mat4,
+        texture: Option<&Texture>,
+    ) {
         for indecies in mesh.get_triangles() {
             let vertices = mesh.get_vertices_from_triangle(*indecies);
 
-            self.raster_triangle(&vertices, texture, mvp);
+            self.raster_triangle(&vertices, texture, mvp, model);
         }
     }
 }

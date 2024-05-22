@@ -19,12 +19,14 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(100.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v1 = Vertex {
             position: glam::vec4(250.0, 400.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
@@ -36,18 +38,21 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(100.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v1 = Vertex {
             position: glam::vec4(250.0, 400.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v2 = Vertex {
             position: glam::vec4(400.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 0.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
@@ -59,18 +64,21 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(100.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v1 = Vertex {
             position: glam::vec4(250.0, 400.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v2 = Vertex {
             position: glam::vec4(400.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 0.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
@@ -82,18 +90,21 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(100.0, 100.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v1 = Vertex {
             position: glam::vec4(250.0, 400.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v2 = Vertex {
             position: glam::vec4(400.0, 100.0, 1.0, 1.0),
             color: glam::vec3(0.0, 0.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
@@ -104,18 +115,21 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-1.0, 1.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
 
         let v1 = Vertex {
             position: glam::vec4(0.0, -1.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.5, 1.0),
         };
 
         let v2 = Vertex {
             position: glam::vec4(1.0, 1.0, 1.0, 1.0),
             color: glam::vec3(0.0, -0.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
 
@@ -138,7 +152,12 @@ pub mod tests {
 
         let triangle = [&v0, &v1, &v2];
 
-        screen.raster_triangle(&triangle, Some(&texture), &mvp);
+        screen.raster_triangle(
+            &triangle,
+            Some(&texture),
+            &mvp,
+            &Transform::IDENTITY.get_local(),
+        );
     }
 
     pub fn _test_textured_quad(screen: &mut Screen) {
@@ -146,21 +165,25 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-1.0, -1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 1.0),
         };
         let v1 = Vertex {
             position: glam::vec4(-1.0, 1.0, 0.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
         let v2 = Vertex {
             position: glam::vec4(1.0, 1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
         let v3 = Vertex {
             position: glam::vec4(1.0, -1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 1.0),
         };
 
@@ -184,8 +207,18 @@ pub mod tests {
         let triangle0 = [&v0, &v2, &v1];
         let triangle1 = [&v0, &v3, &v2];
 
-        screen.raster_triangle(&triangle0, Some(&texture), &mvp);
-        screen.raster_triangle(&triangle1, Some(&texture), &mvp);
+        screen.raster_triangle(
+            &triangle0,
+            Some(&texture),
+            &mvp,
+            &Transform::IDENTITY.get_local(),
+        );
+        screen.raster_triangle(
+            &triangle1,
+            Some(&texture),
+            &mvp,
+            &Transform::IDENTITY.get_local(),
+        );
     }
 
     pub fn _test_camera(screen: &mut Screen, rot: &mut f32) {
@@ -193,21 +226,25 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-1.0, -1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 1.0),
         };
         let v1 = Vertex {
             position: glam::vec4(-1.0, 1.0, 0.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
         let v2 = Vertex {
             position: glam::vec4(1.0, 1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
         let v3 = Vertex {
             position: glam::vec4(1.0, -1.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 1.0),
         };
 
@@ -236,8 +273,8 @@ pub mod tests {
         let triangle0 = [&v0, &v2, &v1];
         let triangle1 = [&v0, &v3, &v2];
 
-        screen.raster_triangle(&triangle0, Some(&texture), &mvp);
-        screen.raster_triangle(&triangle1, Some(&texture), &mvp);
+        screen.raster_triangle(&triangle0, Some(&texture), &mvp, &transform.get_local());
+        screen.raster_triangle(&triangle1, Some(&texture), &mvp, &transform.get_local());
     }
 
     pub fn _test_raster_mesh(screen: &mut Screen) {
@@ -245,21 +282,25 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-2.0, -2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 1.0),
         };
         let v1 = Vertex {
             position: glam::vec4(-2.0, 2.0, 0.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
         let v2 = Vertex {
             position: glam::vec4(2.0, 2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
         let v3 = Vertex {
             position: glam::vec4(2.0, -2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 1.0),
         };
 
@@ -290,6 +331,7 @@ pub mod tests {
         screen.raster_mesh(
             &mesh,
             &(proj * view * transform.get_local()),
+            &transform.get_local(),
             Some(&texture),
         );
     }
@@ -299,21 +341,25 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-1.0, -1.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 1.0),
         };
         let v1 = Vertex {
             position: glam::vec4(-1.0, 1.0, 1.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
         let v2 = Vertex {
             position: glam::vec4(1.0, 1.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
         let v3 = Vertex {
             position: glam::vec4(1.0, -1.0, 1.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 1.0),
         };
 
@@ -387,32 +433,38 @@ pub mod tests {
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform0.get_local()),
+            &transform0.get_local(),
             Some(&texture),
         );
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform1.get_local()),
+            &transform1.get_local(),
             Some(&texture),
         );
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform2.get_local()),
+            &transform2.get_local(),
             Some(&texture),
         );
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform3.get_local()),
+            &transform3.get_local(),
             Some(&texture),
         );
 
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform4.get_local()),
+            &transform4.get_local(),
             Some(&texture),
         );
         screen.raster_mesh(
             &mesh,
             &(proj * view * parent_local * transform5.get_local()),
+            &transform5.get_local(),
             Some(&texture),
         );
     }
@@ -422,21 +474,25 @@ pub mod tests {
         let v0 = Vertex {
             position: glam::vec4(-2.0, -2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 1.0),
         };
         let v1 = Vertex {
             position: glam::vec4(-2.0, 2.0, 0.0, 1.0),
             color: glam::vec3(1.0, 0.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(0.0, 0.0),
         };
         let v2 = Vertex {
             position: glam::vec4(2.0, 2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 0.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 0.0),
         };
         let v3 = Vertex {
             position: glam::vec4(2.0, -2.0, 0.0, 1.0),
             color: glam::vec3(0.0, 1.0, 1.0),
+            normal: glam::vec3(0.0, 0.0, 1.0),
             uv: glam::vec2(1.0, 1.0),
         };
 
@@ -458,7 +514,7 @@ pub mod tests {
         let view = camera.view();
         let mvp = projection * view * transform.get_local();
 
-        screen.raster_mesh(&mesh, &mvp, Some(&texture));
+        screen.raster_mesh(&mesh, &mvp, &transform.get_local(), Some(&texture));
     }
 
     pub fn _test_gltf(screen: &mut Screen, rot: &mut f32, camera: &Camera, mesh: &Mesh) {
@@ -469,6 +525,23 @@ pub mod tests {
         let view = camera.view();
         let mvp = projection * view * transform.get_local();
 
-        screen.raster_mesh(&mesh, &mvp, None);
+        screen.raster_mesh(&mesh, &mvp, &transform.get_local(), None);
+    }
+
+    pub fn _test_gltf_textured(
+        screen: &mut Screen,
+        rot: &mut f32,
+        camera: &Camera,
+        mesh: &Mesh,
+        texture: &Texture,
+    ) {
+        *rot += 0.05;
+        let transform =
+            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, *rot, *rot, 0.0));
+        let projection = camera.projection();
+        let view = camera.view();
+        let mvp = projection * view * transform.get_local();
+
+        screen.raster_mesh(&mesh, &mvp, &transform.get_local(), Some(texture));
     }
 }
