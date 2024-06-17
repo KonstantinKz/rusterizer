@@ -59,8 +59,9 @@ fn main() {
         ..Default::default()
     };
 
-    let texture = Texture::load(Path::new("assets/gltf/Default_albedo.jpg"));
-    let mesh = load_gltf(Path::new("assets/gltf/DamagedHelmet.gltf"));
+    let _texture = Texture::load(Path::new("assets/gltf/Default_albedo.jpg"));
+    let _mesh_teapot = load_gltf(Path::new("assets/gltf/teapot.gltf"));
+    let _mesh_helmet = load_gltf(Path::new("assets/gltf/DamagedHelmet.gltf"));
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         screen.clear();
@@ -80,8 +81,8 @@ fn main() {
         //_test_raster_mesh(&mut screen);
         //_test_textured_cube(&mut screen, &mut rot);
         //_test_camera_inputs(&mut screen, &mut rot, &camera);
-        // _test_gltf(&mut screen, &mut rot, &camera, &mesh);
-        _test_gltf_textured(&mut screen, &mut rot, &camera, &mesh, &texture);
+        //_test_gltf(&mut screen, &mut rot, &camera, &_mesh_teapot);
+        _test_gltf_textured(&mut screen, &mut rot, &camera, &_mesh_helmet, &_texture);
 
         window
             .update_with_buffer(&screen.data, WIDTH, HEIGHT)

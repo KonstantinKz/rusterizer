@@ -520,7 +520,7 @@ pub mod tests {
     pub fn _test_gltf(screen: &mut Screen, rot: &mut f32, camera: &Camera, mesh: &Mesh) {
         *rot += 0.05;
         let transform =
-            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, *rot, *rot, 0.0));
+            Transform::from_rotation(glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, *rot, 0.0));
         let projection = camera.projection();
         let view = camera.view();
         let mvp = projection * view * transform.get_local();
